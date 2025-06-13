@@ -1,0 +1,67 @@
+{
+  "database": {
+    "type": "postgresdb",
+    "postgresdb": {
+      "host": "postgres",
+      "port": 5432,
+      "database": "n8n",
+      "user": "vitalflow",
+      "password": "vitalflow_secure_password"
+    }
+  },
+  "credentials": {
+    "overwrite": {
+      "data": "ask"
+    }
+  },
+  "workflows": {
+    "defaultName": "VitalFlow Workflow"
+  },
+  "endpoints": {
+    "rest": "rest",
+    "webhook": "webhook",
+    "webhookWaiting": "webhook-waiting",
+    "webhookTest": "webhook-test"
+  },
+  "externalHookFiles": [],
+  "nodes": {
+    "exclude": [],
+    "errorTriggerType": "n8n-nodes-base.errorTrigger"
+  },
+  "settings": {
+    "timezone": "America/New_York",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all",
+    "saveManualExecutions": true,
+    "callerPolicyDefaultOption": "workflowsFromSameOwner"
+  },
+  "userManagement": {
+    "disabled": false,
+    "emails": {
+      "mode": "smtp",
+      "smtp": {
+        "host": "",
+        "port": 587,
+        "secure": false,
+        "auth": {
+          "user": "",
+          "pass": ""
+        }
+      }
+    }
+  },
+  "publicApi": {
+    "disabled": false,
+    "path": "api",
+    "swaggerUi": {
+      "disabled": false
+    }
+  },
+  "vitalflow": {
+    "apiUrl": "http://vitalflow-api:5000",
+    "automationUrl": "http://vitalflow-automation:5001",
+    "analyticsUrl": "http://vitalflow-analytics:5002",
+    "webhookSecret": "vitalflow_webhook_secret_change_this"
+  }
+}
+

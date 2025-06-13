@@ -1,0 +1,439 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: vitalflow_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-vitalflow}
+      POSTGRES_USER: ${POSTGRES_USER:-vitalflow}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-vitalflow_secure_password}
+      POSTGRES_MULTIPLE_DATABASES: ${POSTGRES_MULTIPLE_DATABASES:-n8n,analytics,automation}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d
+      - ./docker/postgres/backups:/backups
+    ports:
+      - "5432:5432"
+    networks:
+      - vitalflow_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-vitalflow} -d ${POSTGRES_DB:-vitalflow}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis for caching and queues
+  redis:
+    image: redis:7-alpine
+    container_name: vitalflow_redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-vitalflow_redis_password}
+    volumes:
+      - redis_data:/data
+      - ./docker/redis/redis.conf:/usr/local/etc/redis/redis.conf
+    ports:
+      - "6379:6379"
+    networks:
+      - vitalflow_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  # n8n Workflow Automation
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: vitalflow_n8n
+    restart: unless-stopped
+    environment:
+      # Database configuration
+      DB_TYPE: postgresdb
+      DB_POSTGRESDB_HOST: postgres
+      DB_POSTGRESDB_PORT: 5432
+      DB_POSTGRESDB_DATABASE: ${N8N_DB_NAME:-n8n}
+      DB_POSTGRESDB_USER: ${POSTGRES_USER:-vitalflow}
+      DB_POSTGRESDB_PASSWORD: ${POSTGRES_PASSWORD:-vitalflow_secure_password}
+      
+      # n8n configuration
+      N8N_BASIC_AUTH_ACTIVE: ${N8N_BASIC_AUTH_ACTIVE:-true}
+      N8N_BASIC_AUTH_USER: ${N8N_BASIC_AUTH_USER:-admin}
+      N8N_BASIC_AUTH_PASSWORD: ${N8N_BASIC_AUTH_PASSWORD:-vitalflow_n8n_password}
+      N8N_HOST: ${N8N_HOST:-localhost}
+      N8N_PORT: 5678
+      N8N_PROTOCOL: ${N8N_PROTOCOL:-http}
+      WEBHOOK_URL: ${N8N_WEBHOOK_URL:-http://localhost:5678}
+      
+      # Security and performance
+      N8N_SECURE_COOKIE: ${N8N_SECURE_COOKIE:-false}
+      N8N_METRICS: ${N8N_METRICS:-true}
+      N8N_LOG_LEVEL: ${N8N_LOG_LEVEL:-info}
+      N8N_LOG_OUTPUT: ${N8N_LOG_OUTPUT:-console,file}
+      
+      # Execution settings
+      EXECUTIONS_PROCESS: ${N8N_EXECUTIONS_PROCESS:-main}
+      EXECUTIONS_TIMEOUT: ${N8N_EXECUTIONS_TIMEOUT:-3600}
+      EXECUTIONS_TIMEOUT_MAX: ${N8N_EXECUTIONS_TIMEOUT_MAX:-7200}
+      
+      # Generic OAuth
+      N8N_CONFIG_FILES: /home/node/.n8n/config
+      
+      # VitalFlow specific environment variables
+      VITALFLOW_API_URL: http://vitalflow-api:5000
+      VITALFLOW_AUTOMATION_URL: http://vitalflow-automation:5001
+      VITALFLOW_ANALYTICS_URL: http://vitalflow-analytics:5002
+    volumes:
+      - n8n_data:/home/node/.n8n
+      - ./docker/n8n/config:/home/node/.n8n/config
+      - ./docker/n8n/workflows:/home/node/.n8n/workflows
+      - ./docker/n8n/credentials:/home/node/.n8n/credentials
+    ports:
+      - "5678:5678"
+    networks:
+      - vitalflow_network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:5678/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # VitalFlow API Service
+  vitalflow-api:
+    build:
+      context: .
+      dockerfile: docker/api/Dockerfile
+    container_name: vitalflow_api
+    restart: unless-stopped
+    environment:
+      # Database configuration
+      DATABASE_URL: postgresql://${POSTGRES_USER:-vitalflow}:${POSTGRES_PASSWORD:-vitalflow_secure_password}@postgres:5432/${POSTGRES_DB:-vitalflow}
+      ANALYTICS_DATABASE_URL: postgresql://${POSTGRES_USER:-vitalflow}:${POSTGRES_PASSWORD:-vitalflow_secure_password}@postgres:5432/analytics
+      
+      # Redis configuration
+      REDIS_URL: redis://:${REDIS_PASSWORD:-vitalflow_redis_password}@redis:6379/0
+      CELERY_BROKER_URL: redis://:${REDIS_PASSWORD:-vitalflow_redis_password}@redis:6379/1
+      CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD:-vitalflow_redis_password}@redis:6379/2
+      
+      # Application configuration
+      FLASK_ENV: ${FLASK_ENV:-production}
+      FLASK_DEBUG: ${FLASK_DEBUG:-false}
+      SECRET_KEY: ${SECRET_KEY:-your_super_secret_key_change_this}
+      
+      # External API configuration
+      TIKTOK_CLIENT_KEY: ${TIKTOK_CLIENT_KEY}
+      TIKTOK_CLIENT_SECRET: ${TIKTOK_CLIENT_SECRET}
+      TIKTOK_ACCESS_TOKEN: ${TIKTOK_ACCESS_TOKEN}
+      SUPLIFUL_API_KEY: ${SUPLIFUL_API_KEY}
+      SUPLIFUL_STORE_ID: ${SUPLIFUL_STORE_ID}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      
+      # Service URLs
+      N8N_URL: http://n8n:5678
+      AUTOMATION_SERVICE_URL: http://vitalflow-automation:5001
+      ANALYTICS_SERVICE_URL: http://vitalflow-analytics:5002
+      
+      # Security
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-your_jwt_secret_key}
+      CORS_ORIGINS: ${CORS_ORIGINS:-*}
+      
+      # Monitoring
+      SENTRY_DSN: ${SENTRY_DSN}
+      DATADOG_API_KEY: ${DATADOG_API_KEY}
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - ./assets:/app/assets
+      - ./generated_content:/app/generated_content
+    ports:
+      - "5000:5000"
+    networks:
+      - vitalflow_network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # VitalFlow Automation Service
+  vitalflow-automation:
+    build:
+      context: .
+      dockerfile: docker/automation/Dockerfile
+    container_name: vitalflow_automation
+    restart: unless-stopped
+    environment:
+      # Database configuration
+      DATABASE_URL: postgresql://${POSTGRES_USER:-vitalflow}:${POSTGRES_PASSWORD:-vitalflow_secure_password}@postgres:5432/automation
+      
+      # Redis configuration
+      REDIS_URL: redis://:${REDIS_PASSWORD:-vitalflow_redis_password}@redis:6379/3
+      
+      # External API configuration
+      TIKTOK_CLIENT_KEY: ${TIKTOK_CLIENT_KEY}
+      TIKTOK_CLIENT_SECRET: ${TIKTOK_CLIENT_SECRET}
+      TIKTOK_ACCESS_TOKEN: ${TIKTOK_ACCESS_TOKEN}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      
+      # Service configuration
+      API_SERVICE_URL: http://vitalflow-api:5000
+      N8N_URL: http://n8n:5678
+      N8N_API_KEY: ${N8N_API_KEY}
+      
+      # Automation settings
+      POSTING_SCHEDULE: ${POSTING_SCHEDULE:-08:00,12:00,18:00}
+      MAX_POSTS_PER_DAY: ${MAX_POSTS_PER_DAY:-3}
+      AUTO_POSTING_ENABLED: ${AUTO_POSTING_ENABLED:-true}
+      CONTENT_GENERATION_ENABLED: ${CONTENT_GENERATION_ENABLED:-true}
+      
+      # Security
+      SECRET_KEY: ${SECRET_KEY:-your_super_secret_key_change_this}
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - ./generated_content:/app/generated_content
+      - ./assets/templates:/app/templates
+    ports:
+      - "5001:5001"
+    networks:
+      - vitalflow_network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      vitalflow-api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # VitalFlow Analytics Service
+  vitalflow-analytics:
+    build:
+      context: .
+      dockerfile: docker/analytics/Dockerfile
+    container_name: vitalflow_analytics
+    restart: unless-stopped
+    environment:
+      # Database configuration
+      DATABASE_URL: postgresql://${POSTGRES_USER:-vitalflow}:${POSTGRES_PASSWORD:-vitalflow_secure_password}@postgres:5432/analytics
+      
+      # Redis configuration
+      REDIS_URL: redis://:${REDIS_PASSWORD:-vitalflow_redis_password}@redis:6379/4
+      
+      # Service configuration
+      API_SERVICE_URL: http://vitalflow-api:5000
+      AUTOMATION_SERVICE_URL: http://vitalflow-automation:5001
+      
+      # Analytics settings
+      ANALYTICS_ENABLED: ${ANALYTICS_ENABLED:-true}
+      REAL_TIME_ANALYTICS: ${REAL_TIME_ANALYTICS:-true}
+      DATA_RETENTION_DAYS: ${DATA_RETENTION_DAYS:-365}
+      
+      # External integrations
+      GOOGLE_ANALYTICS_ID: ${GOOGLE_ANALYTICS_ID}
+      FACEBOOK_PIXEL_ID: ${FACEBOOK_PIXEL_ID}
+      TIKTOK_PIXEL_ID: ${TIKTOK_PIXEL_ID}
+      
+      # Security
+      SECRET_KEY: ${SECRET_KEY:-your_super_secret_key_change_this}
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - ./reports:/app/reports
+    ports:
+      - "5002:5002"
+    networks:
+      - vitalflow_network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      vitalflow-api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5002/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Content Generation Worker (Celery)
+  vitalflow-worker:
+    build:
+      context: .
+      dockerfile: docker/worker/Dockerfile
+    container_name: vitalflow_worker
+    restart: unless-stopped
+    environment:
+      # Database configuration
+      DATABASE_URL: postgresql://${POSTGRES_USER:-vitalflow}:${POSTGRES_PASSWORD:-vitalflow_secure_password}@postgres:5432/${POSTGRES_DB:-vitalflow}
+      
+      # Redis configuration
+      CELERY_BROKER_URL: redis://:${REDIS_PASSWORD:-vitalflow_redis_password}@redis:6379/1
+      CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD:-vitalflow_redis_password}@redis:6379/2
+      
+      # External API configuration
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      TIKTOK_ACCESS_TOKEN: ${TIKTOK_ACCESS_TOKEN}
+      
+      # Worker configuration
+      CELERY_WORKER_CONCURRENCY: ${CELERY_WORKER_CONCURRENCY:-4}
+      CELERY_WORKER_LOGLEVEL: ${CELERY_WORKER_LOGLEVEL:-info}
+      
+      # Security
+      SECRET_KEY: ${SECRET_KEY:-your_super_secret_key_change_this}
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - ./generated_content:/app/generated_content
+      - ./assets/templates:/app/templates
+    networks:
+      - vitalflow_network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      vitalflow-api:
+        condition: service_healthy
+    command: celery -A src.worker worker --loglevel=info --concurrency=4
+
+  # Celery Beat Scheduler
+  vitalflow-scheduler:
+    build:
+      context: .
+      dockerfile: docker/scheduler/Dockerfile
+    container_name: vitalflow_scheduler
+    restart: unless-stopped
+    environment:
+      # Database configuration
+      DATABASE_URL: postgresql://${POSTGRES_USER:-vitalflow}:${POSTGRES_PASSWORD:-vitalflow_secure_password}@postgres:5432/${POSTGRES_DB:-vitalflow}
+      
+      # Redis configuration
+      CELERY_BROKER_URL: redis://:${REDIS_PASSWORD:-vitalflow_redis_password}@redis:6379/1
+      CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD:-vitalflow_redis_password}@redis:6379/2
+      
+      # Scheduler configuration
+      CELERY_BEAT_SCHEDULE_FILENAME: /app/data/celerybeat-schedule
+      
+      # Security
+      SECRET_KEY: ${SECRET_KEY:-your_super_secret_key_change_this}
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+    networks:
+      - vitalflow_network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      vitalflow-api:
+        condition: service_healthy
+    command: celery -A src.scheduler beat --loglevel=info --schedule=/app/data/celerybeat-schedule
+
+  # Nginx Reverse Proxy
+  nginx:
+    image: nginx:alpine
+    container_name: vitalflow_nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./docker/nginx/nginx.conf:/etc/nginx/nginx.conf
+      - ./docker/nginx/conf.d:/etc/nginx/conf.d
+      - ./docker/nginx/ssl:/etc/nginx/ssl
+      - ./logs/nginx:/var/log/nginx
+    networks:
+      - vitalflow_network
+    depends_on:
+      - vitalflow-api
+      - vitalflow-automation
+      - vitalflow-analytics
+      - n8n
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Monitoring with Prometheus (Optional)
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: vitalflow_prometheus
+    restart: unless-stopped
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=200h'
+      - '--web.enable-lifecycle'
+    volumes:
+      - ./docker/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    ports:
+      - "9090:9090"
+    networks:
+      - vitalflow_network
+    profiles:
+      - monitoring
+
+  # Grafana Dashboard (Optional)
+  grafana:
+    image: grafana/grafana:latest
+    container_name: vitalflow_grafana
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-vitalflow_grafana_password}
+      GF_INSTALL_PLUGINS: grafana-clock-panel,grafana-simple-json-datasource
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./docker/grafana/provisioning:/etc/grafana/provisioning
+      - ./docker/grafana/dashboards:/var/lib/grafana/dashboards
+    ports:
+      - "3000:3000"
+    networks:
+      - vitalflow_network
+    depends_on:
+      - prometheus
+    profiles:
+      - monitoring
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  n8n_data:
+    driver: local
+  prometheus_data:
+    driver: local
+  grafana_data:
+    driver: local
+
+networks:
+  vitalflow_network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+

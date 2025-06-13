@@ -1,0 +1,495 @@
+{
+  "name": "VitalFlow TikTok Automation Workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 4
+            }
+          ]
+        }
+      },
+      "id": "content-generation-trigger",
+      "name": "Content Generation Trigger",
+      "type": "n8n-nodes-base.cron",
+      "typeVersion": 1,
+      "position": [
+        240,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "url": "http://localhost:5000/api/automation/generate-content",
+        "options": {
+          "bodyContentType": "json",
+          "jsonBody": "{\n  \"product_id\": \"auto\",\n  \"template_type\": \"auto\"\n}"
+        }
+      },
+      "id": "generate-content",
+      "name": "Generate Content",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        460,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "content-success-check",
+              "leftValue": "={{ $json.success }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equal"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "content-success-check",
+      "name": "Content Success Check",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        680,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=http://localhost:8080/generate-images",
+        "options": {
+          "bodyContentType": "json",
+          "jsonBody": "={\n  \"content_id\": \"{{ $json.content.id }}\",\n  \"product\": {{ JSON.stringify($json.product) }},\n  \"template\": {{ JSON.stringify($json.template) }},\n  \"content\": {{ JSON.stringify($json.content) }}\n}"
+        }
+      },
+      "id": "generate-images",
+      "name": "Generate Images",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        900,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "images-success-check",
+              "leftValue": "={{ $json.success }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equal"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "images-success-check",
+      "name": "Images Success Check",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "url": "http://localhost:5001/api/tiktok/ready-content",
+        "options": {}
+      },
+      "id": "queue-for-posting",
+      "name": "Queue for Posting",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        1340,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "cronExpression": "0 8,12,18 * * *"
+            }
+          ]
+        }
+      },
+      "id": "posting-schedule-trigger",
+      "name": "Posting Schedule Trigger",
+      "type": "n8n-nodes-base.cron",
+      "typeVersion": 1,
+      "position": [
+        240,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "url": "http://localhost:5001/api/tiktok/ready-content",
+        "options": {}
+      },
+      "id": "get-ready-content",
+      "name": "Get Ready Content",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        460,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "content-available-check",
+              "leftValue": "={{ $json.content.length }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "content-available-check",
+      "name": "Content Available Check",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        680,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=http://localhost:5001/api/tiktok/post-now",
+        "options": {
+          "bodyContentType": "json",
+          "jsonBody": "={\n  \"content_id\": \"{{ $json.content[0].id }}\"\n}"
+        }
+      },
+      "id": "post-to-tiktok",
+      "name": "Post to TikTok",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        900,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "url": "http://localhost:5001/api/tiktok/analytics",
+        "options": {}
+      },
+      "id": "update-analytics",
+      "name": "Update Analytics",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        1120,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 1
+            }
+          ]
+        }
+      },
+      "id": "monitoring-trigger",
+      "name": "Monitoring Trigger",
+      "type": "n8n-nodes-base.cron",
+      "typeVersion": 1,
+      "position": [
+        240,
+        700
+      ]
+    },
+    {
+      "parameters": {
+        "url": "http://localhost:5000/api/automation/automation-status",
+        "options": {}
+      },
+      "id": "check-system-status",
+      "name": "Check System Status",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        460,
+        700
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "system-health-check",
+              "leftValue": "={{ $json.status.system_status }}",
+              "rightValue": "running",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "system-health-check",
+      "name": "System Health Check",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        680,
+        700
+      ]
+    },
+    {
+      "parameters": {
+        "url": "http://localhost:5000/api/automation/analytics",
+        "options": {}
+      },
+      "id": "collect-analytics",
+      "name": "Collect Analytics",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        900,
+        700
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "resource": "file",
+        "options": {
+          "fileName": "=analytics_{{ $now.format('YYYY-MM-DD_HH-mm') }}.json"
+        },
+        "fileContent": "={{ JSON.stringify($json, null, 2) }}",
+        "filePath": "/home/ubuntu/analytics_reports/"
+      },
+      "id": "save-analytics-report",
+      "name": "Save Analytics Report",
+      "type": "n8n-nodes-base.files",
+      "typeVersion": 1,
+      "position": [
+        1120,
+        700
+      ]
+    }
+  ],
+  "connections": {
+    "Content Generation Trigger": {
+      "main": [
+        [
+          {
+            "node": "Generate Content",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Content": {
+      "main": [
+        [
+          {
+            "node": "Content Success Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Content Success Check": {
+      "main": [
+        [
+          {
+            "node": "Generate Images",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Images": {
+      "main": [
+        [
+          {
+            "node": "Images Success Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Images Success Check": {
+      "main": [
+        [
+          {
+            "node": "Queue for Posting",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Posting Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Get Ready Content",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Ready Content": {
+      "main": [
+        [
+          {
+            "node": "Content Available Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Content Available Check": {
+      "main": [
+        [
+          {
+            "node": "Post to TikTok",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Post to TikTok": {
+      "main": [
+        [
+          {
+            "node": "Update Analytics",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Monitoring Trigger": {
+      "main": [
+        [
+          {
+            "node": "Check System Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check System Status": {
+      "main": [
+        [
+          {
+            "node": "System Health Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "System Health Check": {
+      "main": [
+        [
+          {
+            "node": "Collect Analytics",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Collect Analytics": {
+      "main": [
+        [
+          {
+            "node": "Save Analytics Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "createdAt": "2024-12-06T19:46:35.000Z",
+      "updatedAt": "2024-12-06T19:46:35.000Z",
+      "id": "vitalflow-automation",
+      "name": "VitalFlow Automation"
+    }
+  ],
+  "triggerCount": 3,
+  "updatedAt": "2024-12-06T19:46:35.000Z",
+  "versionId": "1"
+}
+

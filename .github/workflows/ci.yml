@@ -1,0 +1,287 @@
+name: 🧪 Continuous Integration
+
+on:
+  push:
+    branches: [ main, develop, feature/* ]
+  pull_request:
+    branches: [ main, develop ]
+  schedule:
+    # Run tests daily at 2 AM UTC
+    - cron: '0 2 * * *'
+
+env:
+  PYTHON_VERSION: '3.11'
+  NODE_VERSION: '18'
+
+jobs:
+  # Code Quality Checks
+  code-quality:
+    name: 🔍 Code Quality
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: 📥 Checkout code
+      uses: actions/checkout@v4
+      
+    - name: 🐍 Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+        
+    - name: 📦 Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install black flake8 mypy isort bandit safety
+        pip install -r requirements.txt
+        
+    - name: 🎨 Check code formatting with Black
+      run: |
+        black --check --diff src/
+        
+    - name: 🔍 Lint with flake8
+      run: |
+        flake8 src/ --count --select=E9,F63,F7,F82 --show-source --statistics
+        flake8 src/ --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+        
+    - name: 🔍 Type checking with mypy
+      run: |
+        mypy src/ --ignore-missing-imports
+        
+    - name: 📦 Check import sorting
+      run: |
+        isort --check-only --diff src/
+        
+    - name: 🔒 Security check with bandit
+      run: |
+        bandit -r src/ -ll
+        
+    - name: 🔒 Dependency security check
+      run: |
+        safety check
+
+  # Unit Tests
+  unit-tests:
+    name: 🧪 Unit Tests
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ['3.11', '3.12']
+    
+    steps:
+    - name: 📥 Checkout code
+      uses: actions/checkout@v4
+      
+    - name: 🐍 Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+        
+    - name: 📦 Cache dependencies
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ matrix.python-version }}-${{ hashFiles('**/requirements.txt') }}
+        
+    - name: 📦 Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pytest pytest-cov pytest-mock pytest-asyncio
+        
+    - name: 🧪 Run unit tests
+      run: |
+        pytest tests/unit/ -v --cov=src --cov-report=xml --cov-report=html
+        
+    - name: 📊 Upload coverage reports
+      uses: codecov/codecov-action@v3
+      with:
+        file: ./coverage.xml
+        flags: unittests
+        name: codecov-${{ matrix.python-version }}
+
+  # Integration Tests
+  integration-tests:
+    name: 🔗 Integration Tests
+    runs-on: ubuntu-latest
+    services:
+      redis:
+        image: redis:7
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+          
+    steps:
+    - name: 📥 Checkout code
+      uses: actions/checkout@v4
+      
+    - name: 🐍 Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+        
+    - name: 📦 Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pytest pytest-asyncio
+        
+    - name: 🗄️ Set up test database
+      run: |
+        python scripts/setup_test_db.py
+        
+    - name: 🧪 Run integration tests
+      env:
+        REDIS_URL: redis://localhost:6379
+        TEST_DATABASE_URL: sqlite:///test.db
+      run: |
+        pytest tests/integration/ -v
+        
+    - name: 🧹 Cleanup test environment
+      run: |
+        python scripts/cleanup_test_env.py
+
+  # API Tests
+  api-tests:
+    name: 🌐 API Tests
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: 📥 Checkout code
+      uses: actions/checkout@v4
+      
+    - name: 🐍 Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+        
+    - name: 📦 Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pytest requests
+        
+    - name: 🚀 Start test server
+      run: |
+        python src/api/main.py &
+        sleep 10
+        
+    - name: 🧪 Run API tests
+      run: |
+        pytest tests/api/ -v
+        
+    - name: 🛑 Stop test server
+      run: |
+        pkill -f "python src/api/main.py"
+
+  # Performance Tests
+  performance-tests:
+    name: ⚡ Performance Tests
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: 📥 Checkout code
+      uses: actions/checkout@v4
+      
+    - name: 🐍 Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+        
+    - name: 📦 Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install locust pytest-benchmark
+        
+    - name: ⚡ Run performance tests
+      run: |
+        pytest tests/performance/ -v --benchmark-only
+        
+    - name: 📊 Generate performance report
+      run: |
+        python scripts/performance_report.py
+
+  # Frontend Tests (if applicable)
+  frontend-tests:
+    name: 🎨 Frontend Tests
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: 📥 Checkout code
+      uses: actions/checkout@v4
+      
+    - name: 🟢 Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+        
+    - name: 📦 Install dependencies
+      run: npm ci
+      
+    - name: 🧪 Run frontend tests
+      run: npm test
+      
+    - name: 🏗️ Build frontend
+      run: npm run build
+      
+    - name: 🔍 Lint frontend code
+      run: npm run lint
+
+  # Documentation Tests
+  docs-tests:
+    name: 📚 Documentation Tests
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: 📥 Checkout code
+      uses: actions/checkout@v4
+      
+    - name: 🐍 Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+        
+    - name: 📦 Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install sphinx sphinx-rtd-theme doc8
+        
+    - name: 📚 Build documentation
+      run: |
+        cd docs && make html
+        
+    - name: 🔍 Check documentation style
+      run: |
+        doc8 docs/
+
+  # Notification
+  notify:
+    name: 📢 Notify Results
+    runs-on: ubuntu-latest
+    needs: [code-quality, unit-tests, integration-tests, api-tests, performance-tests]
+    if: always()
+    
+    steps:
+    - name: 📢 Notify success
+      uses: 8398a7/action-slack@v3
+      with:
+        status: success
+        channel: '#ci-cd'
+        text: '✅ All CI checks passed for VitalFlow Automation!'
+        webhook_url: ${{ secrets.SLACK_WEBHOOK }}
+      if: ${{ needs.code-quality.result == 'success' && needs.unit-tests.result == 'success' && needs.integration-tests.result == 'success' && needs.api-tests.result == 'success' && needs.performance-tests.result == 'success' }}
+      
+    - name: 📢 Notify failure
+      uses: 8398a7/action-slack@v3
+      with:
+        status: failure
+        channel: '#ci-cd'
+        text: '❌ CI checks failed for VitalFlow Automation. Please check the logs.'
+        webhook_url: ${{ secrets.SLACK_WEBHOOK }}
+      if: ${{ needs.code-quality.result == 'failure' || needs.unit-tests.result == 'failure' || needs.integration-tests.result == 'failure' || needs.api-tests.result == 'failure' || needs.performance-tests.result == 'failure' }}
+

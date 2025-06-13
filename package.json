@@ -1,0 +1,92 @@
+{
+  "name": "vitalflow-automation",
+  "version": "1.0.0",
+  "description": "Complete automated TikTok Shop business system for wellness supplements",
+  "main": "index.js",
+  "scripts": {
+    "start": "n8n start",
+    "dev": "n8n start --tunnel",
+    "build": "npm run build:frontend && npm run build:docs",
+    "build:frontend": "cd frontend && npm run build",
+    "build:docs": "cd docs && npm run build",
+    "test": "jest",
+    "lint": "eslint src/",
+    "format": "prettier --write src/",
+    "deploy": "npm run build && npm run deploy:production",
+    "deploy:production": "node scripts/deploy.js",
+    "health-check": "node scripts/health-check.js",
+    "backup": "node scripts/backup.js",
+    "restore": "node scripts/restore.js"
+  },
+  "keywords": [
+    "tiktok",
+    "automation",
+    "e-commerce",
+    "ai",
+    "content-generation",
+    "social-media",
+    "wellness",
+    "supplements",
+    "dropshipping"
+  ],
+  "author": "VitalFlow Team",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/vitalflow-automation.git"
+  },
+  "bugs": {
+    "url": "https://github.com/yourusername/vitalflow-automation/issues"
+  },
+  "homepage": "https://github.com/yourusername/vitalflow-automation#readme",
+  "dependencies": {
+    "n8n": "^1.15.0",
+    "express": "^4.18.2",
+    "cors": "^2.8.5",
+    "helmet": "^7.1.0",
+    "morgan": "^1.10.0",
+    "dotenv": "^16.3.1",
+    "axios": "^1.6.2",
+    "moment": "^2.29.4",
+    "lodash": "^4.17.21",
+    "uuid": "^9.0.1",
+    "jsonwebtoken": "^9.0.2",
+    "bcryptjs": "^2.4.3",
+    "multer": "^1.4.5-lts.1",
+    "sharp": "^0.32.6",
+    "node-cron": "^3.0.3",
+    "winston": "^3.11.0",
+    "compression": "^1.7.4",
+    "rate-limiter-flexible": "^3.0.8"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0",
+    "supertest": "^6.3.3",
+    "eslint": "^8.54.0",
+    "eslint-config-prettier": "^9.0.0",
+    "eslint-plugin-node": "^11.1.0",
+    "prettier": "^3.1.0",
+    "nodemon": "^3.0.2",
+    "concurrently": "^8.2.2",
+    "@types/node": "^20.10.0",
+    "typescript": "^5.3.2",
+    "ts-node": "^10.9.1"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  },
+  "n8n": {
+    "credentials": {
+      "tiktokApi": {
+        "name": "TikTok API",
+        "extends": ["httpHeaderAuth"]
+      },
+      "suplifulApi": {
+        "name": "Supliful API",
+        "extends": ["httpHeaderAuth"]
+      }
+    }
+  }
+}
+

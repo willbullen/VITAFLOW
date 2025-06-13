@@ -1,0 +1,300 @@
+name: 🔒 Security Scanning
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  schedule:
+    # Run security scans daily at 3 AM UTC
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+
+env:
+  PYTHON_VERSION: '3.11'
+  NODE_VERSION: '18'
+
+jobs:
+  # Dependency Vulnerability Scanning
+  dependency-scan:
+    name: 🔍 Dependency Scan
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: 📥 Checkout code
+      uses: actions/checkout@v4
+      
+    - name: 🐍 Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+        
+    - name: 📦 Install Python dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install safety pip-audit
+        pip install -r requirements.txt
+        
+    - name: 🔍 Python dependency security scan
+      run: |
+        safety check --json --output safety-report.json || true
+        pip-audit --format=json --output=pip-audit-report.json || true
+        
+    - name: 🟢 Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+        
+    - name: 📦 Install Node.js dependencies
+      run: npm ci
+      
+    - name: 🔍 Node.js dependency security scan
+      run: |
+        npm audit --audit-level moderate --json > npm-audit-report.json || true
+        
+    - name: 📊 Upload dependency scan reports
+      uses: actions/upload-artifact@v3
+      with:
+        name: dependency-scan-reports
+        path: |
+          safety-report.json
+          pip-audit-report.json
+          npm-audit-report.json
+
+  # Static Code Analysis
+  static-analysis:
+    name: 🔍 Static Code Analysis
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: 📥 Checkout code
+      uses: actions/checkout@v4
+      
+    - name: 🐍 Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+        
+    - name: 📦 Install security tools
+      run: |
+        python -m pip install --upgrade pip
+        pip install bandit semgrep
+        pip install -r requirements.txt
+        
+    - name: 🔍 Bandit security scan
+      run: |
+        bandit -r src/ -f json -o bandit-report.json || true
+        bandit -r src/ -f txt -o bandit-report.txt || true
+        
+    - name: 🔍 Semgrep security scan
+      run: |
+        semgrep --config=auto --json --output=semgrep-report.json src/ || true
+        
+    - name: 📊 Upload static analysis reports
+      uses: actions/upload-artifact@v3
+      with:
+        name: static-analysis-reports
+        path: |
+          bandit-report.json
+          bandit-report.txt
+          semgrep-report.json
+
+  # Secret Scanning
+  secret-scan:
+    name: 🔐 Secret Scanning
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: 📥 Checkout code
+      uses: actions/checkout@v4
+      
+    - name: 🔐 TruffleHog secret scan
+      uses: trufflesecurity/trufflehog@main
+      with:
+        path: ./
+        base: main
+        head: HEAD
+        extra_args: --debug --only-verified
+        
+    - name: 🔐 GitLeaks secret scan
+      uses: gitleaks/gitleaks-action@v2
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
+
+  # Container Security (if using Docker)
+  container-scan:
+    name: 🐳 Container Security
+    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request'
+    
+    steps:
+    - name: 📥 Checkout code
+      uses: actions/checkout@v4
+      
+    - name: 🐳 Build Docker image
+      run: |
+        docker build -t vitalflow-automation:latest .
+        
+    - name: 🔍 Trivy container scan
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: 'vitalflow-automation:latest'
+        format: 'sarif'
+        output: 'trivy-results.sarif'
+        
+    - name: 📊 Upload Trivy scan results
+      uses: github/codeql-action/upload-sarif@v2
+      with:
+        sarif_file: 'trivy-results.sarif'
+
+  # CodeQL Analysis
+  codeql:
+    name: 🔍 CodeQL Analysis
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+      
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [ 'python', 'javascript' ]
+        
+    steps:
+    - name: 📥 Checkout code
+      uses: actions/checkout@v4
+      
+    - name: 🔍 Initialize CodeQL
+      uses: github/codeql-action/init@v2
+      with:
+        languages: ${{ matrix.language }}
+        
+    - name: 🏗️ Autobuild
+      uses: github/codeql-action/autobuild@v2
+      
+    - name: 🔍 Perform CodeQL Analysis
+      uses: github/codeql-action/analyze@v2
+      with:
+        category: "/language:${{matrix.language}}"
+
+  # License Compliance
+  license-scan:
+    name: 📄 License Compliance
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: 📥 Checkout code
+      uses: actions/checkout@v4
+      
+    - name: 🐍 Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+        
+    - name: 📦 Install license tools
+      run: |
+        python -m pip install --upgrade pip
+        pip install pip-licenses licensecheck
+        pip install -r requirements.txt
+        
+    - name: 📄 Python license scan
+      run: |
+        pip-licenses --format=json --output-file=python-licenses.json
+        licensecheck --format=json > licensecheck-report.json || true
+        
+    - name: 🟢 Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+        
+    - name: 📦 Install Node.js dependencies
+      run: npm ci
+      
+    - name: 📄 Node.js license scan
+      run: |
+        npx license-checker --json --out nodejs-licenses.json
+        
+    - name: 📊 Upload license reports
+      uses: actions/upload-artifact@v3
+      with:
+        name: license-reports
+        path: |
+          python-licenses.json
+          licensecheck-report.json
+          nodejs-licenses.json
+
+  # Compliance Check
+  compliance:
+    name: ✅ Compliance Check
+    runs-on: ubuntu-latest
+    needs: [dependency-scan, static-analysis, secret-scan, license-scan]
+    
+    steps:
+    - name: 📥 Checkout code
+      uses: actions/checkout@v4
+      
+    - name: 📥 Download all reports
+      uses: actions/download-artifact@v3
+      
+    - name: 🐍 Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+        
+    - name: 📦 Install compliance tools
+      run: |
+        python -m pip install --upgrade pip
+        pip install jq yq
+        
+    - name: ✅ Generate compliance report
+      run: |
+        python scripts/generate_compliance_report.py
+        
+    - name: 📊 Upload compliance report
+      uses: actions/upload-artifact@v3
+      with:
+        name: compliance-report
+        path: compliance-report.html
+
+  # Security Notification
+  notify-security:
+    name: 📢 Security Notifications
+    runs-on: ubuntu-latest
+    needs: [dependency-scan, static-analysis, secret-scan, codeql, compliance]
+    if: always()
+    
+    steps:
+    - name: 📢 Notify security team on high severity issues
+      uses: 8398a7/action-slack@v3
+      with:
+        status: custom
+        custom_payload: |
+          {
+            channel: '#security',
+            username: 'Security Bot',
+            icon_emoji: ':shield:',
+            attachments: [{
+              color: 'danger',
+              fields: [{
+                title: 'Security Scan Results',
+                value: 'High severity security issues detected in VitalFlow Automation. Please review immediately.',
+                short: false
+              }]
+            }]
+          }
+        webhook_url: ${{ secrets.SECURITY_SLACK_WEBHOOK }}
+      if: ${{ contains(needs.*.result, 'failure') }}
+      
+    - name: 📢 Notify on successful security scan
+      uses: 8398a7/action-slack@v3
+      with:
+        status: success
+        channel: '#security'
+        text: '🛡️ Security scans completed successfully for VitalFlow Automation!'
+        webhook_url: ${{ secrets.SECURITY_SLACK_WEBHOOK }}
+      if: ${{ !contains(needs.*.result, 'failure') }}
+

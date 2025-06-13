@@ -45,11 +45,312 @@ VitalFlow is a comprehensive TikTok Shop automation platform that combines AI-po
          │                       │                       │
          └───────────────────────┼───────────────────────┘
                                  │
-                    ┌─────────────────┐
-                    │      Nginx      │
-                    │  Reverse Proxy  │
-                    │   (Port 80)     │
-                    └─────────────────┘
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│    Portainer    │    │  Cloudflare     │    │      Nginx      │
+│   Management    │    │     Tunnel      │    │  Reverse Proxy  │
+│   (Port 9000)   │    │  (Secure SSL)   │    │   (Port 80)     │
+└─────────────────┘    └─────────────────┘    └─────────────────┘
+```
+
+### 🆕 Enhanced Features
+- **🐳 Portainer Integration**: Professional Docker container management interface
+- **🔒 Cloudflare Tunnel**: Secure external access without port forwarding
+- **🪟 Windows Support**: Native PowerShell scripts for Windows environments
+- **🌸 Celery Flower**: Real-time task monitoring and management
+- **📊 Advanced Monitoring**: Prometheus and Grafana integration (optional)
+
+## 🚀 Quick Start
+
+### Prerequisites
+- **Docker Desktop** (Windows/macOS) or **Docker Engine** (Linux)
+- **Docker Compose** v2.0+
+- **Git** for cloning the repository
+- **4GB+ RAM** and **10GB+ disk space**
+
+### 🪟 Windows Users
+VitalFlow now includes native PowerShell scripts for Windows environments:
+
+```powershell
+# Start the system
+.\scripts\startup.ps1
+
+# Check system status
+.\scripts\startup.ps1 -Status
+
+# View logs
+.\scripts\startup.ps1 -Logs
+
+# Stop the system
+.\scripts\shutdown.ps1
+```
+
+### 🐧 Linux/macOS Users
+Use the bash scripts for Unix-like systems:
+
+```bash
+# Start the system
+./scripts/startup.sh
+
+# Check system status
+./scripts/startup.sh --status
+
+# Stop the system
+./scripts/shutdown.sh
+```
+
+## 🔧 Installation & Setup
+
+### Step 1: Clone and Configure
+```bash
+git clone https://github.com/willbullen/VITAFLOW.git
+cd VITAFLOW
+cp .env.example .env
+```
+
+### Step 2: Configure Environment
+Edit the `.env` file with your settings:
+
+```bash
+# Required: Database passwords
+POSTGRES_PASSWORD=your_secure_password
+REDIS_PASSWORD=your_redis_password
+
+# Required: Application secrets
+SECRET_KEY=your_super_secret_key
+JWT_SECRET_KEY=your_jwt_secret
+
+# Required: n8n authentication
+N8N_BASIC_AUTH_USER=admin
+N8N_BASIC_AUTH_PASSWORD=your_n8n_password
+
+# Required: API keys
+TIKTOK_CLIENT_KEY=your_tiktok_key
+TIKTOK_CLIENT_SECRET=your_tiktok_secret
+OPENAI_API_KEY=your_openai_key
+SUPLIFUL_API_KEY=your_supliful_key
+
+# Optional: Portainer admin password
+PORTAINER_ADMIN_PASSWORD=your_portainer_password_hash
+
+# Optional: Cloudflare Tunnel (already configured)
+TUNNEL_TOKEN=your_tunnel_token
+```
+
+### Step 3: Start the System
+
+**Windows:**
+```powershell
+.\scripts\startup.ps1
+```
+
+**Linux/macOS:**
+```bash
+./scripts/startup.sh
+```
+
+### Step 4: Access Your Services
+
+| Service | URL | Purpose |
+|---------|-----|---------|
+| **VitalFlow Analytics** | http://localhost:5002/dashboard | Main business dashboard |
+| **n8n Workflows** | http://localhost:5678 | Automation platform |
+| **Portainer** | http://localhost:9000 | Container management |
+| **Celery Flower** | http://localhost:5555 | Task monitoring |
+| **VitalFlow API** | http://localhost:5000 | REST API |
+
+## 🐳 Portainer Integration
+
+Portainer provides a professional web interface for managing your Docker containers, images, networks, and volumes.
+
+### Features
+- **Container Management**: Start, stop, restart, and monitor containers
+- **Image Management**: Pull, build, and manage Docker images
+- **Network Management**: Create and configure Docker networks
+- **Volume Management**: Manage persistent data storage
+- **Stack Management**: Deploy and manage Docker Compose stacks
+- **User Management**: Multi-user access with role-based permissions
+
+### Access Portainer
+1. Navigate to http://localhost:9000
+2. Create admin account on first visit
+3. Connect to local Docker environment
+4. Manage VitalFlow containers through the web interface
+
+### Portainer Benefits
+- **Visual Management**: No command-line required
+- **Real-time Monitoring**: Live container stats and logs
+- **Easy Deployment**: Deploy new stacks with web interface
+- **Security**: Role-based access control
+- **Backup & Restore**: Easy container and volume management
+
+## 🔒 Cloudflare Tunnel Integration
+
+Cloudflare Tunnel provides secure external access to your VitalFlow system without exposing ports or configuring firewalls.
+
+### Features
+- **Zero Trust Security**: No open ports on your firewall
+- **SSL/TLS Encryption**: Automatic HTTPS for all connections
+- **DDoS Protection**: Cloudflare's global network protection
+- **Access Control**: IP restrictions and authentication
+- **Global CDN**: Fast access from anywhere in the world
+
+### How It Works
+1. **Secure Tunnel**: Creates encrypted tunnel to Cloudflare
+2. **Domain Routing**: Routes traffic through your custom domain
+3. **Local Access**: Forwards requests to local services
+4. **SSL Termination**: Handles SSL certificates automatically
+
+### Configuration
+The tunnel is pre-configured with your provided token. To customize:
+
+1. Edit `docker/cloudflare/config.yml`
+2. Update tunnel routes and domains
+3. Restart the tunnel service:
+   ```bash
+   docker compose restart cloudflaretunnel
+   ```
+
+### External Access
+Once configured, access your services securely from anywhere:
+- **Analytics Dashboard**: https://your-domain.com/dashboard
+- **n8n Workflows**: https://your-domain.com/n8n
+- **Portainer**: https://your-domain.com/portainer
+- **API Endpoints**: https://your-domain.com/api
+
+## 🌸 Celery Flower Monitoring
+
+Flower provides real-time monitoring of Celery tasks and workers.
+
+### Features
+- **Task Monitoring**: View active, completed, and failed tasks
+- **Worker Management**: Monitor worker status and performance
+- **Queue Management**: View task queues and backlogs
+- **Performance Metrics**: Task execution times and throughput
+- **Historical Data**: Task history and trends
+
+### Access Flower
+1. Navigate to http://localhost:5555
+2. Login with credentials from `.env` file
+3. Monitor VitalFlow background tasks
+4. View content generation and posting queues
+
+### Key Metrics
+- **Active Tasks**: Currently running content generation
+- **Completed Tasks**: Successfully posted content
+- **Failed Tasks**: Errors requiring attention
+- **Worker Status**: Background service health
+- **Queue Length**: Pending tasks waiting for processing
+
+## 🪟 Windows PowerShell Scripts
+
+VitalFlow includes comprehensive PowerShell scripts for Windows users.
+
+### Startup Script Features
+- **Prerequisites Check**: Validates Docker installation
+- **Environment Validation**: Checks required configuration
+- **Port Availability**: Ensures no conflicts
+- **Service Health**: Monitors startup progress
+- **Error Handling**: Graceful failure recovery
+
+### Startup Options
+```powershell
+# Basic startup
+.\scripts\startup.ps1
+
+# Show system status
+.\scripts\startup.ps1 -Status
+
+# Run health checks
+.\scripts\startup.ps1 -Health
+
+# View service logs
+.\scripts\startup.ps1 -Logs
+
+# Force restart services
+.\scripts\startup.ps1 -Action restart
+
+# Build and start
+.\scripts\startup.ps1 -Action build
+```
+
+### Shutdown Script Features
+- **Graceful Shutdown**: Stops services in correct order
+- **Data Backup**: Optional backup before shutdown
+- **Force Stop**: Emergency container termination
+- **Cleanup Options**: Remove containers and volumes
+- **Interactive Menu**: User-friendly shutdown options
+
+### Shutdown Options
+```powershell
+# Graceful shutdown
+.\scripts\shutdown.ps1
+
+# Backup and shutdown
+.\scripts\shutdown.ps1 -Backup
+
+# Force stop all containers
+.\scripts\shutdown.ps1 -Force
+
+# Complete cleanup
+.\scripts\shutdown.ps1 -Clean
+
+# Remove all data (destructive)
+.\scripts\shutdown.ps1 -Clean -RemoveVolumes
+```
+
+## 📊 Service Management
+
+### Container Status
+Check the status of all services:
+
+**Windows:**
+```powershell
+.\scripts\startup.ps1 -Status
+```
+
+**Linux/macOS:**
+```bash
+./scripts/startup.sh --status
+```
+
+### Health Monitoring
+Run comprehensive health checks:
+
+**Windows:**
+```powershell
+.\scripts\startup.ps1 -Health
+```
+
+**Linux/macOS:**
+```bash
+./scripts/startup.sh --health
+```
+
+### Log Management
+View service logs:
+
+**Windows:**
+```powershell
+.\scripts\startup.ps1 -Logs
+```
+
+**Linux/macOS:**
+```bash
+./scripts/startup.sh --logs
+```
+
+### Service Restart
+Restart specific services:
+
+```bash
+# Restart all services
+docker compose restart
+
+# Restart specific service
+docker compose restart vitalflow-api
+
+# Restart with rebuild
+docker compose up -d --build vitalflow-api
 ```
 
 ## 🚀 Quick Start
